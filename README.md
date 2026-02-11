@@ -1,4 +1,4 @@
-# planner
+# nextask
 
 Generate daily and weekly plans from your Notion todo list + Google Calendar, using Claude.
 
