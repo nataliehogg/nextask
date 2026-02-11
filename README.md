@@ -1,6 +1,6 @@
 # nextask
 
-Generate daily and weekly plans from your Notion todo list + Google Calendar, using Claude.
+Generate daily and weekly plans from your Notion todo list + Google Calendar, using Gemini/Claude/etc.
 
 ---
 
@@ -9,7 +9,7 @@ Generate daily and weekly plans from your Notion todo list + Google Calendar, us
 ### 1. Install dependencies
 
 ```bash
-cd planner
+cd nextask
 pip install -r requirements.txt
 ```
 
@@ -67,9 +67,11 @@ Then fill in each value (see steps below).
 
 ---
 
-### 5. Anthropic API key
+### 5. LLM API key
 
-Get your key from https://console.anthropic.com/ and set `ANTHROPIC_API_KEY` in `.env`.
+For Claude: get your key from https://console.anthropic.com/ and set `ANTHROPIC_API_KEY` in `.env`.
+
+For Gemini: get your key from https://aistudio.google.com/api-keys and set `GEMINI_API_KEY` in `.env`.
 
 ---
 
