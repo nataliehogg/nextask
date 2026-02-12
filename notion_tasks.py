@@ -136,9 +136,21 @@ def _format_task_line(task: dict) -> str:
     project_tag = f"[{task['project']}] " if task["project"] else ""
     priority = task["priority"] or "unset"
     if task.get("quick"):
-        return f"- {project_tag}{task['text']} (quick — 15 min, priority: {priority})"
-    effort = task["effort"] or "unset"
-    return f"- {project_tag}{task['text']} (priority: {priority}, effort: {effort})"
+        base = f"- {project_tag}{task['text']} (quick — 15 min, priority: {priority})"
+    else:
+        effort = task["effort"] or "unset"
+        base = f"- {project_tag}{task['text']} (priority: {priority}, effort: {effort})"
+    if "deadline_days" in task:
+        days = task["deadline_days"]
+        event = task["deadline_event"]
+        if days == 0:
+            deadline_str = f" ⚠ {event} is TODAY"
+        elif days == 1:
+            deadline_str = f" ⚠ {event} is TOMORROW"
+        else:
+            deadline_str = f" ⚠ {event} in {days} days"
+        base += deadline_str
+    return base
 
 
 def format_tasks_for_prompt(tasks: dict[str, list[dict]]) -> str:

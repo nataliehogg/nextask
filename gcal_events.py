@@ -92,6 +92,14 @@ def get_events_this_week() -> list[dict]:
     return fetch_events(start, end)
 
 
+def get_events_next_two_weeks() -> list[dict]:
+    """Return all events from now until 14 days ahead."""
+    tz = datetime.timezone.utc
+    start = datetime.datetime.now(tz=tz)
+    end = start + datetime.timedelta(days=14)
+    return fetch_events(start, end)
+
+
 def get_events_today(date: datetime.date | None = None) -> list[dict]:
     start, end = get_day_bounds(date)
     return fetch_events(start, end)

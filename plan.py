@@ -27,7 +27,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from notion_tasks import get_todo_tasks, format_tasks_for_prompt
-from gcal_events import get_events_this_week, get_events_today, format_events_for_prompt
+from gcal_events import get_events_this_week, get_events_today, get_events_next_two_weeks, format_events_for_prompt
 from claude_planner import generate_weekly_plan, generate_daily_plan
 
 load_dotenv()
@@ -44,6 +44,67 @@ DAY_NAMES = {
 
 # Minimum available minutes required to suggest a task of each effort level
 EFFORT_MIN_MINUTES = {"high": 90, "medium": 45, "low": 1}
+
+# Short words to ignore when matching project names to event titles
+_STOP_WORDS = {"and", "the", "for", "with", "from", "into", "work", "call", "meeting", "telecon"}
+
+
+def _keywords(text: str) -> set[str]:
+    """Extract meaningful words (>=3 chars, not stop words) from a string."""
+    words = text.lower().replace("-", " ").replace("_", " ").split()
+    return {w for w in words if len(w) >= 3 and w not in _STOP_WORDS}
+
+
+def apply_meeting_deadlines(tasks: dict, upcoming_events: list[dict]) -> dict:
+    """
+    Cross-reference tasks with upcoming calendar events (next 2 weeks).
+    If a task's project shares keywords with an event title, attach the
+    number of days until that event as 'deadline_days' and the event name
+    as 'deadline_event'. Then re-sort actionable tasks so that within each
+    priority level, tasks with imminent meetings float to the top.
+    """
+    today = datetime.date.today()
+
+    # Build list of (days_away, event_keywords, event_summary) for timed events
+    event_entries = []
+    for ev in upcoming_events:
+        if ev["all_day"]:
+            event_date = datetime.date.fromisoformat(ev["start"])
+        else:
+            event_date = datetime.datetime.fromisoformat(ev["start"]).date()
+        days_away = (event_date - today).days
+        if days_away < 0:
+            continue
+        event_entries.append((days_away, _keywords(ev["summary"]), ev["summary"]))
+
+    # Annotate each actionable task with its soonest matching meeting
+    for task in tasks.get("actionable", []):
+        project = task.get("project") or ""
+        proj_keywords = _keywords(project)
+        if not proj_keywords:
+            continue
+
+        soonest_days = None
+        soonest_name = None
+        for days_away, ev_keywords, ev_summary in event_entries:
+            if proj_keywords & ev_keywords:  # any keyword overlap
+                if soonest_days is None or days_away < soonest_days:
+                    soonest_days = days_away
+                    soonest_name = ev_summary
+
+        if soonest_days is not None:
+            task["deadline_days"] = soonest_days
+            task["deadline_event"] = soonest_name
+
+    # Re-sort: priority first, then deadline (soonest first), then effort
+    from notion_tasks import PRIORITY_ORDER, EFFORT_ORDER
+    tasks["actionable"].sort(key=lambda t: (
+        PRIORITY_ORDER.get(t.get("priority"), 9),
+        t.get("deadline_days", 999),
+        EFFORT_ORDER.get(t.get("effort"), 9),
+    ))
+
+    return tasks
 
 
 def resolve_day(day_str: str | None) -> datetime.date:
@@ -187,8 +248,8 @@ def main():
         default=None,
         help="Day name (e.g. 'thursday') — defaults to today",
     )
-    day_parser.add_argument("--arrive", required=True, help="Arrival time, e.g. 10:00")
-    day_parser.add_argument("--leave", required=True, help="Finish time, e.g. 16:00")
+    day_parser.add_argument("--arrive", default="10:00", help="Arrival time, e.g. 10:00 (default: 10:00)")
+    day_parser.add_argument("--leave", default="18:00", help="Finish time, e.g. 18:00 (default: 18:00)")
     day_parser.add_argument("--week-plan", help="Path to an existing week plan for context")
     day_parser.add_argument("--output", help="Output file path (default: auto-named)")
 
@@ -212,10 +273,16 @@ def main():
 
     print("Fetching tasks from Notion...")
     tasks = get_todo_tasks()
-    tasks_text = format_tasks_for_prompt(tasks)
     n_actionable = len(tasks["actionable"])
     n_pending = len(tasks["pending"])
     print(f"  Found {n_actionable} actionable, {n_pending} pending.")
+
+    print("Fetching upcoming calendar events for deadline matching...")
+    upcoming_events = get_events_next_two_weeks()
+    tasks = apply_meeting_deadlines(tasks, upcoming_events)
+    print(f"  Checked {len(upcoming_events)} upcoming events for deadline matches.")
+
+    tasks_text = format_tasks_for_prompt(tasks)
 
     if args.mode == "week":
         print("Fetching this week's calendar events...")
