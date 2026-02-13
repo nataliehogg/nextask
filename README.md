@@ -4,6 +4,13 @@ Generate next-task suggestions, daily plans, and weekly plans from your Notion t
 
 ---
 
+## Quickstart
+```bash
+nexttask
+dailytask thursday --arrive 10:00 --leave 17:30
+weeklytask 160226
+```
+
 ## Setup
 
 ### 1. Install dependencies
