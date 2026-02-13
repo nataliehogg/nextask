@@ -41,10 +41,12 @@ def get_calendar_service():
     return build("calendar", "v3", credentials=creds)
 
 
-def get_week_bounds() -> tuple[datetime.datetime, datetime.datetime]:
-    """Return Monday 00:00 and Sunday 23:59 of the current week."""
-    today = datetime.date.today()
-    monday = today - datetime.timedelta(days=today.weekday())
+def get_week_bounds(monday: datetime.date | None = None) -> tuple[datetime.datetime, datetime.datetime]:
+    """Return Monday 00:00 and Sunday 23:59 for the week containing *monday*.
+    If *monday* is None, uses the current week."""
+    if monday is None:
+        today = datetime.date.today()
+        monday = today - datetime.timedelta(days=today.weekday())
     sunday = monday + datetime.timedelta(days=6)
     tz = datetime.timezone.utc
     start = datetime.datetime.combine(monday, datetime.time.min, tzinfo=tz)
@@ -87,8 +89,8 @@ def fetch_events(time_min: datetime.datetime, time_max: datetime.datetime) -> li
     return events
 
 
-def get_events_this_week() -> list[dict]:
-    start, end = get_week_bounds()
+def get_events_this_week(monday: datetime.date | None = None) -> list[dict]:
+    start, end = get_week_bounds(monday)
     return fetch_events(start, end)
 
 

@@ -121,18 +121,20 @@ def resolve_day(day_str: str | None) -> datetime.date:
     return today + datetime.timedelta(days=days_ahead)
 
 
-def week_label() -> str:
-    today = datetime.date.today()
-    monday = today - datetime.timedelta(days=today.weekday())
+def week_label(monday: datetime.date | None = None) -> str:
+    if monday is None:
+        today = datetime.date.today()
+        monday = today - datetime.timedelta(days=today.weekday())
     friday = monday + datetime.timedelta(days=4)
     return f"{monday.strftime('%-d %b')}–{friday.strftime('%-d %b %Y')}"
 
 
 def output_filename(mode: str, date: datetime.date | None = None) -> str:
     if mode == "week":
-        today = datetime.date.today()
-        monday = today - datetime.timedelta(days=today.weekday())
-        return f"week_plan_{monday.strftime('%d%b').lower()}.md"
+        if date is None:
+            today = datetime.date.today()
+            date = today - datetime.timedelta(days=today.weekday())
+        return f"week_plan_{date.strftime('%d%b').lower()}.md"
     else:
         d = date or datetime.date.today()
         return f"day_plan_{d.strftime('%d%b').lower()}.md"
@@ -238,6 +240,10 @@ def main():
         required=True,
         help='Working hours per day, e.g. "Mon 10-16, Wed 10-12:30, Thu 11:30-15"',
     )
+    week_parser.add_argument(
+        "--start-date",
+        help="Any date in the target week as DDMMYY, e.g. 170225 (default: current week)",
+    )
     week_parser.add_argument("--output", help="Output file path (default: auto-named)")
 
     # --- daily mode ---
@@ -285,8 +291,19 @@ def main():
     tasks_text = format_tasks_for_prompt(tasks)
 
     if args.mode == "week":
-        print("Fetching this week's calendar events...")
-        events = get_events_this_week()
+        monday = None
+        if args.start_date:
+            try:
+                monday = datetime.datetime.strptime(args.start_date, "%d%m%y").date()
+            except ValueError:
+                print(f"Invalid --start-date '{args.start_date}'. Use DDMMYY format, e.g. 170225.")
+                sys.exit(1)
+            # Snap to Monday of the given date's week
+            monday = monday - datetime.timedelta(days=monday.weekday())
+
+        label = week_label(monday)
+        print(f"Fetching calendar events for week of {label}...")
+        events = get_events_this_week(monday)
         events_text = format_events_for_prompt(events)
         print(f"  Found {len(events)} events.")
 
@@ -294,12 +311,12 @@ def main():
         plan = generate_weekly_plan(
             tasks_text=tasks_text,
             events_text=events_text,
-            week_label=week_label(),
+            week_label=label,
             working_hours=args.hours,
             tasks=tasks,
         )
 
-        out_path = args.output or output_filename("week")
+        out_path = args.output or output_filename("week", monday)
         Path(out_path).write_text(plan)
         print(f"\nWeekly plan written to: {out_path}")
 
